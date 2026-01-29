@@ -222,6 +222,43 @@ The application provides a wrapper around the SevDesk API. To use SevDesk featur
 
 **Note:** The SevDesk API client implementation follows the general structure of the SevDesk API. You may need to adjust the exact endpoints and data structures based on the current SevDesk API documentation.
 
+## Production Deployment
+
+### Security Considerations
+
+When deploying to production, ensure you:
+
+1. **Set proper CORS origins**: Update `CORS_ORIGINS` in `.env` to restrict access to trusted domains only:
+   ```env
+   CORS_ORIGINS=https://yourdomain.com,https://app.yourdomain.com
+   ```
+
+2. **Secure your API key**: Never commit your `.env` file. Always use environment variables or secrets management services.
+
+3. **Use HTTPS**: Always deploy behind a reverse proxy (nginx, Caddy) with HTTPS enabled.
+
+4. **Database**: Consider upgrading to PostgreSQL or MySQL for production workloads:
+   ```env
+   DATABASE_URL=postgresql+asyncpg://user:password@localhost/sevdesk
+   ```
+
+5. **Monitoring**: Add logging and monitoring tools to track application health and errors.
+
+6. **Rate Limiting**: Implement rate limiting to prevent abuse of your API endpoints.
+
+### Alternative to uv
+
+If you prefer using pip and virtual environments:
+
+```bash
+# Create virtual environment
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -e .
+```
+
 ## License
 
 MIT
