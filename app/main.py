@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.core.database import init_db
+from app.core.config import get_settings
 from app.api import quotes, invoices
 
 
@@ -15,6 +16,8 @@ async def lifespan(app: FastAPI):
     pass
 
 
+settings = get_settings()
+
 app = FastAPI(
     title="SevDesk Connector",
     description="A FastAPI backend service to ease the creation of quotes and billings with the sevdesk API",
@@ -23,9 +26,10 @@ app = FastAPI(
 )
 
 # Configure CORS
+cors_origins = settings.cors_origins.split(",") if settings.cors_origins != "*" else ["*"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Adjust in production
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -55,9 +59,7 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    from app.core.config import get_settings
 
-    settings = get_settings()
     uvicorn.run(
         "app.main:app",
         host=settings.host,

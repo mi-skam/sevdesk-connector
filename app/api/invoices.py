@@ -3,17 +3,32 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List
 from app.core.database import get_db
-from app.models.models import Invoice, InvoiceStatus
+from app.models.models import Invoice, InvoiceStatus, Quote
 from app.models.schemas import InvoiceCreate, InvoiceUpdate, InvoiceResponse
 from app.services.sevdesk_client import SevDeskClient
 from datetime import datetime
+import uuid
+import logging
 
 router = APIRouter(prefix="/invoices", tags=["invoices"])
+logger = logging.getLogger(__name__)
 
 
 def generate_invoice_number() -> str:
-    """Generate a unique invoice number."""
-    return f"INV-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    """Generate a unique invoice number using timestamp and UUID."""
+    return f"INV-{datetime.now().strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6]}"
+
+
+# Shared SevDesk client instance
+_sevdesk_client: SevDeskClient = None
+
+
+def get_sevdesk_client() -> SevDeskClient:
+    """Get or create the SevDesk client instance."""
+    global _sevdesk_client
+    if _sevdesk_client is None:
+        _sevdesk_client = SevDeskClient()
+    return _sevdesk_client
 
 
 @router.post("/", response_model=InvoiceResponse, status_code=status.HTTP_201_CREATED)
@@ -24,6 +39,16 @@ async def create_invoice(
     """
     Create a new invoice and optionally sync with SevDesk.
     """
+    # Validate quote_id if provided
+    if invoice.quote_id:
+        result = await db.execute(select(Quote).where(Quote.id == invoice.quote_id))
+        quote = result.scalar_one_or_none()
+        if not quote:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Quote with id {invoice.quote_id} not found",
+            )
+
     # Create invoice in local database
     db_invoice = Invoice(
         invoice_number=generate_invoice_number(),
@@ -132,6 +157,7 @@ async def delete_invoice(
 async def sync_invoice_to_sevdesk(
     invoice_id: int,
     db: AsyncSession = Depends(get_db),
+    client: SevDeskClient = Depends(get_sevdesk_client),
 ):
     """
     Sync an invoice to SevDesk API.
@@ -158,7 +184,6 @@ async def sync_invoice_to_sevdesk(
         }
 
         # Send to SevDesk
-        client = SevDeskClient()
         if invoice.sevdesk_id:
             response = await client.update_invoice(invoice.sevdesk_id, sevdesk_data)
         else:
@@ -173,9 +198,10 @@ async def sync_invoice_to_sevdesk(
         return invoice
 
     except Exception as e:
+        logger.exception("Failed to sync invoice to SevDesk")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to sync with SevDesk: {str(e)}",
+            detail="Failed to sync with SevDesk. Please check your API key and try again.",
         )
 
 
@@ -183,6 +209,7 @@ async def sync_invoice_to_sevdesk(
 async def send_invoice(
     invoice_id: int,
     db: AsyncSession = Depends(get_db),
+    client: SevDeskClient = Depends(get_sevdesk_client),
 ):
     """
     Send an invoice via SevDesk email.
@@ -203,7 +230,6 @@ async def send_invoice(
         )
 
     try:
-        client = SevDeskClient()
         await client.send_invoice(invoice.sevdesk_id)
 
         # Update status
@@ -214,7 +240,8 @@ async def send_invoice(
         return invoice
 
     except Exception as e:
+        logger.exception("Failed to send invoice")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to send invoice: {str(e)}",
+            detail="Failed to send invoice. Please try again later.",
         )

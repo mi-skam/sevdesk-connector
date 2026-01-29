@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, Text, Enum
+from sqlalchemy import Column, Integer, String, Float, DateTime, Text, Enum, ForeignKey
 from sqlalchemy.sql import func
 from app.core.database import Base
 import enum
@@ -51,7 +51,7 @@ class Invoice(Base):
     id = Column(Integer, primary_key=True, index=True)
     sevdesk_id = Column(String, unique=True, nullable=True, index=True)
     invoice_number = Column(String, unique=True, index=True)
-    quote_id = Column(Integer, nullable=True)
+    quote_id = Column(Integer, ForeignKey("quotes.id"), nullable=True)
     customer_name = Column(String, nullable=False)
     customer_email = Column(String)
     description = Column(Text)

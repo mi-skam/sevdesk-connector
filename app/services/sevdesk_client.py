@@ -15,6 +15,19 @@ class SevDeskClient:
             "Authorization": self.api_key,
             "Content-Type": "application/json",
         }
+        self._client: Optional[httpx.AsyncClient] = None
+
+    async def _get_client(self) -> httpx.AsyncClient:
+        """Get or create the HTTP client."""
+        if self._client is None:
+            self._client = httpx.AsyncClient(timeout=30.0)
+        return self._client
+
+    async def close(self):
+        """Close the HTTP client."""
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
 
     async def _request(
         self,
@@ -25,18 +38,17 @@ class SevDeskClient:
     ) -> Dict[str, Any]:
         """Make an HTTP request to the SevDesk API."""
         url = f"{self.base_url}/{endpoint}"
-
-        async with httpx.AsyncClient() as client:
-            response = await client.request(
-                method=method,
-                url=url,
-                headers=self.headers,
-                json=data,
-                params=params,
-                timeout=30.0,
-            )
-            response.raise_for_status()
-            return response.json()
+        client = await self._get_client()
+        
+        response = await client.request(
+            method=method,
+            url=url,
+            headers=self.headers,
+            json=data,
+            params=params,
+        )
+        response.raise_for_status()
+        return response.json()
 
     async def create_quote(self, quote_data: Dict[str, Any]) -> Dict[str, Any]:
         """

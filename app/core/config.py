@@ -1,9 +1,14 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 
 
 class Settings(BaseSettings):
-    """Application settings loaded from environment variables."""
+    """
+    Application settings loaded from environment variables.
+    
+    Required environment variables:
+    - SEVDESK_API_KEY: Your SevDesk API key (required)
+    """
 
     # SevDesk API Configuration
     sevdesk_api_key: str
@@ -16,10 +21,14 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
     debug: bool = False
+    
+    # CORS Configuration
+    cors_origins: str = "*"
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=False,
+    )
 
 
 @lru_cache()

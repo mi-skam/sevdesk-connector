@@ -7,13 +7,28 @@ from app.models.models import Quote, QuoteStatus
 from app.models.schemas import QuoteCreate, QuoteUpdate, QuoteResponse
 from app.services.sevdesk_client import SevDeskClient
 from datetime import datetime
+import uuid
+import logging
 
 router = APIRouter(prefix="/quotes", tags=["quotes"])
+logger = logging.getLogger(__name__)
 
 
 def generate_quote_number() -> str:
-    """Generate a unique quote number."""
-    return f"Q-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    """Generate a unique quote number using timestamp and UUID."""
+    return f"Q-{datetime.now().strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6]}"
+
+
+# Shared SevDesk client instance
+_sevdesk_client: SevDeskClient = None
+
+
+def get_sevdesk_client() -> SevDeskClient:
+    """Get or create the SevDesk client instance."""
+    global _sevdesk_client
+    if _sevdesk_client is None:
+        _sevdesk_client = SevDeskClient()
+    return _sevdesk_client
 
 
 @router.post("/", response_model=QuoteResponse, status_code=status.HTTP_201_CREATED)
@@ -131,6 +146,7 @@ async def delete_quote(
 async def sync_quote_to_sevdesk(
     quote_id: int,
     db: AsyncSession = Depends(get_db),
+    client: SevDeskClient = Depends(get_sevdesk_client),
 ):
     """
     Sync a quote to SevDesk API.
@@ -157,7 +173,6 @@ async def sync_quote_to_sevdesk(
         }
 
         # Send to SevDesk
-        client = SevDeskClient()
         if quote.sevdesk_id:
             response = await client.update_quote(quote.sevdesk_id, sevdesk_data)
         else:
@@ -172,7 +187,8 @@ async def sync_quote_to_sevdesk(
         return quote
 
     except Exception as e:
+        logger.exception("Failed to sync quote to SevDesk")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to sync with SevDesk: {str(e)}",
+            detail="Failed to sync with SevDesk. Please check your API key and try again.",
         )
